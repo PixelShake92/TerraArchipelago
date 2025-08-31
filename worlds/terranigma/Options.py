@@ -1,78 +1,138 @@
+# Terranigma Options.py - player customization options
+
 from typing import List, Dict, Any
 from dataclasses import dataclass
 from worlds.AutoWorld import PerGameCommonOptions
 from Options import Choice, OptionGroup, Toggle, Range
 
-# If youve ever gone to an options page and seen how sometimes options are grouped
-# This is that
 def create_option_groups() -> List[OptionGroup]:
+    """Create organized option groups for the web interface"""
     option_group_list: List[OptionGroup] = []
-    for name, options in ap_skeleton_option_groups.items():
+    for name, options in terranigma_option_groups.items():
         option_group_list.append(OptionGroup(name=name, options=options))
-
     return option_group_list
 
-class StartingChapter(Choice):
+class StartingRegion(Choice):
     """
-    Determines which chapter you'll start with.
-    When you grab choice you'll get the associated number.
-    IE: If the player chooses the sewer then when you go to call StartingChapter you'll get 3
-    When displaying the options names on the site, _ will become spaces and the word option will go away.
+    Determines which region you'll start with access to.
+    Crysta is the normal start. Other options provide early access to later areas.
     """
-    display_name = "Starting Chapter"
-    option_green_hill_zone = 1
-    option_romania = 2
-    option_the_sewer = 3
+    display_name = "Starting Region"
+    option_crysta = 0
+    option_lumina = 1
+    option_louran = 2
+    option_loire = 3
+    option_freedom = 4
+    default = 0
+
+class KeyItemPlacement(Choice):
+    """
+    Controls how key progression items are distributed.
+    Early: More key items available in early locations.
+    Balanced: Key items distributed evenly throughout progression.
+    Late: Key items more likely to be in later locations.
+    """
+    display_name = "Key Item Placement"
+    option_early = 0
+    option_balanced = 1
+    option_late = 2
     default = 1
 
-class ExtraLocations(Toggle):
+class EquipmentScaling(Toggle):
     """
-    This will enable the extra locations option. Toggle is just true or false.
+    When enabled, equipment power scales with game progression.
+    Later equipment will generally be more powerful.
     """
-    display_name = "Add Extra Locations"
+    display_name = "Scale Equipment Power"
+
+class ShopRandomization(Toggle):
+    """
+    When enabled, shop contents will be randomized and included as locations.
+    This significantly increases the number of available checks.
+    """
+    display_name = "Randomize Shops"
+
+class MagicRandomization(Toggle):
+    """
+    When enabled, magic spells will be randomized as items instead of learned normally.
+    """
+    display_name = "Randomize Magic"
+
+class BossDifficulty(Choice):
+    """
+    Adjusts boss difficulty scaling.
+    Normal: Vanilla boss difficulty.
+    Buffed: Bosses have increased stats.
+    Random: Boss stats randomized.
+    """
+    display_name = "Boss Difficulty"
+    option_normal = 0
+    option_buffed = 1
+    option_random = 2
+    default = 0
 
 class TrapChance(Range):
     """
     Determines the chance for any junk item to become a trap.
     Set it to 0 for no traps.
-    Range is in fact a range. You can set the limits and its default.
     """
     display_name = "Trap Chance"
     range_start = 0
     range_end = 100
-    default = 0
+    default = 10
 
-class ForcefemTrapWeight(Range):
+class SpeedTrapWeight(Range):
     """
-    The weight of forcefem traps in the trap pool.
-    Does really cool stuff to your body.
+    The weight of speed traps in the trap pool.
+    Speed traps temporarily slow down Ark's movement.
     """
-    display_name = "Forcefem Trap Weight"
+    display_name = "Speed Trap Weight"
     range_start = 0
     range_end = 100
-    default = 100
+    default = 33
 
-class SpeedChangeTrapWeight(Range):
+class DamageTrapWeight(Range):
     """
-    The weight of speed change traps in the trap pool.
-    Speed change traps change the game speed for x seconds.
+    The weight of damage traps in the trap pool.
+    Damage traps temporarily reduce Ark's attack power.
     """
-    display_name = "Speed Change Trap Weight"
+    display_name = "Damage Trap Weight"
     range_start = 0
     range_end = 100
-    default = 25
+    default = 33
+
+class ConfusionTrapWeight(Range):
+    """
+    The weight of confusion traps in the trap pool.
+    Confusion traps temporarily reverse movement controls.
+    """
+    display_name = "Confusion Trap Weight"
+    range_start = 0
+    range_end = 100
+    default = 34
 
 @dataclass
-class APSkeletonOptions(PerGameCommonOptions):
-    StartingChapter:            StartingChapter
-    ExtraLocations:             ExtraLocations
-    TrapChance:                 TrapChance
-    ForcefemTrapWeight:         ForcefemTrapWeight
-    SpeedChangeTrapWeight:      SpeedChangeTrapWeight
+class TerranigmaOptions(PerGameCommonOptions):
+    starting_region: StartingRegion
+    key_item_placement: KeyItemPlacement
+    equipment_scaling: EquipmentScaling
+    shop_randomization: ShopRandomization
+    magic_randomization: MagicRandomization
+    boss_difficulty: BossDifficulty
+    trap_chance: TrapChance
+    speed_trap_weight: SpeedTrapWeight
+    damage_trap_weight: DamageTrapWeight
+    confusion_trap_weight: ConfusionTrapWeight
 
-# This is where you organize your options
-# Its entirely up to you how you want to organize it
-ap_skeleton_option_groups: Dict[str, List[Any]] = {
-    "General Options": [StartingChapter, ExtraLocations],
-    "Trap Options": [TrapChance, ForcefemTrapWeight, SpeedChangeTrapWeight]
+# Organization of options into groups for the web interface
+terranigma_option_groups: Dict[str, List[Any]] = {
+    "General Options": [
+        StartingRegion, KeyItemPlacement, EquipmentScaling
+    ],
+    "Randomization Options": [
+        ShopRandomization, MagicRandomization, BossDifficulty
+    ],
+    "Trap Options": [
+        TrapChance, SpeedTrapWeight, DamageTrapWeight, ConfusionTrapWeight
+    ]
 }

@@ -1,167 +1,255 @@
-# So the goal here is to have a catalog of all the items in your game
-# To correctly generate a games items they need to be bundled in a list
-# A list in programming terms is anything in square brackets [] to put it simply
+# Terranigma Items.py - defines all items in the game for Archipelago
+# Based on actual Terranigma Randomizer data
 
-# When a list is described its described as a list of x where x is the type of variable within it
-# IE: ["apple", "pear", "grape"] is a list of strings (anything inside "" OR '' are considered strings)
-
-# Logging = output. How you'll figure out whats going wrong
 import logging
-
-# Built in AP imports
 from BaseClasses import Item, ItemClassification
-
-# These come from the other files in this example. If you want to see the source ctrl + click the name
-# You can also do that ctrl + click for any functions to see what they do
-from .Types import ItemData, ChapterType, APSkeletonItem, chapter_type_to_name
+from .Types import ItemData, TerranigmaItem
 from .Locations import get_total_locations
 from typing import List, Dict, TYPE_CHECKING
 
-# This is just making sure nothing gets confused dw about what its doing exactly
 if TYPE_CHECKING:
-    from . import APSkeletonWorld
+    from . import TerranigmaWorld
 
-# If you're curious about the -> List[Item] that is a syntax to make sure you return the correct variable type
-# In this instance we're saying we only want to return a list of items
-# You'll see a bunch of other examples of this in other functions
-# It's main purpose is to protect yourself from yourself
-def create_itempool(world: "APSkeletonWorld") -> List[Item]:
-    # This is the empty list of items. You'll add all the items in the game to this list
+# Base ID for all Terranigma items - choose a unique range
+BASE_ID = 700000
+
+# Item type flags (similar to Kirby Super Star approach)
+PROGRESSION_FLAG = 0x000  # 700000-700255
+WEAPON_FLAG = 0x100       # 700256-700511  
+ARMOR_FLAG = 0x200        # 700512-700767
+CONSUMABLE_FLAG = 0x300   # 700768-701023
+GEM_FLAG = 0x400          # 701024-701279
+TRAP_FLAG = 0x500         # 701280-701535
+
+def create_itempool(world: "TerranigmaWorld") -> List[Item]:
+    """Create the complete item pool for Terranigma"""
     itempool: List[Item] = []
-
-    # In this function is where you would remove any starting items that you add in options such as starting chapter
-    # This is also the place you would add dynamic amounts of items from options
-    # I can point to Sly Cooper and the Thievious Raccoonus since I did that
-
-    # This is a good place to grab anything you need from options
-    starting_chapter = chapter_type_to_name[ChapterType(world.options.StartingChapter)]
-
-    # For this example I'll make it so there is a starting chapter
-    # We loop through all the chapters in the my_chapter section
-    for chapter in ap_skeleton_chapters.keys():
-        # If the starting chapter equals the chapter we're looking at skip it
-        # We skip it since we dont want to add the chapter the player started with to the item pool
-        print("-------------------------")
-        print(starting_chapter)
-        print("-------------------------")
-        if starting_chapter == chapter:
-            continue
-        # Otherwise then we create an item with that name and add it to the item pool
-        else:
-            itempool.append(create_item(world, chapter))
     
-    # It's up to you and how you want things organized but I like to deal with victory here
-    # This creates your win item and then places it at the "location" where you win
+    # Add all progression items
+    for item_name, item_data in progression_items.items():
+        if item_name == "Starstone":
+            # Add 5 Starstones as required by the logic
+            for i in range(5):
+                itempool.append(create_item(world, item_name))
+        else:
+            itempool.append(create_item(world, item_name))
+    
+    # Add useful items (equipment and consumables)
+    for item_name in useful_items.keys():
+        itempool.append(create_item(world, item_name))
+    
+    # Create and place victory item
     victory = create_item(world, "Victory")
-    world.multiworld.get_location("Beat Final Boss", world.player).place_locked_item(victory)
-
-    # Then junk items are made
-    # Check out the create_junk_items function for more details
-    itempool += create_junk_items(world, get_total_locations(world) - len(itempool) - 1)
-
+    world.multiworld.get_location("Dark Gaia Defeated", world.player).place_locked_item(victory)
+    
+    # Fill remaining slots with filler items and traps
+    total_locations = get_total_locations(world) - 1  # -1 for victory
+    items_needed = total_locations - len(itempool)
+    
+    if items_needed > 0:
+        itempool += create_junk_items(world, items_needed)
+    
     return itempool
 
-# This is a generic function to create a singular item
-def create_item(world: "APSkeletonWorld", name: str) -> Item:
+def create_item(world: "TerranigmaWorld", name: str) -> Item:
+    """Create a single item"""
     data = item_table[name]
-    return APSkeletonItem(name, data.classification, data.ap_code, world.player)
+    return TerranigmaItem(name, data.classification, data.ap_code, world.player)
 
-# Another generic function. For creating a bunch of items at once!
-def create_multiple_items(world: "APSkeletonWorld", name: str, count: int,
-                          item_type: ItemClassification = ItemClassification.progression) -> List[Item]:
-    data = item_table[name]
-    itemlist: List[Item] = []
-
-    for i in range(count):
-        itemlist += [APSkeletonItem(name, item_type, data.ap_code, world.player)]
-
-    return itemlist
-
-# Finally, where junk items are created
-def create_junk_items(world: "APSkeletonWorld", count: int) -> List[Item]:
-    trap_chance = world.options.TrapChance.value
+def create_junk_items(world: "TerranigmaWorld", count: int) -> List[Item]:
+    """Create junk items and traps to fill remaining slots"""
+    trap_chance = world.options.trap_chance.value
     junk_pool: List[Item] = []
     junk_list: Dict[str, int] = {}
     trap_list: Dict[str, int] = {}
-
-    # This grabs all the junk items and trap items
+    
+    # Build junk item list
     for name in item_table.keys():
-        # Here we are getting all the junk item names and weights
         ic = item_table[name].classification
         if ic == ItemClassification.filler:
-            junk_list[name] = junk_weights.get(name)
-
-        # This is for traps if your randomization includes it
-        # It also grabs the trap weights from the options page
+            junk_list[name] = junk_weights.get(name, 1)
         elif trap_chance > 0 and ic == ItemClassification.trap:
-            if name == "Forcefem Trap":
-                trap_list[name] = world.options.ForcefemTrapWeight.value
-            elif name == "Speed Change Trap":
-                trap_list[name] = world.options.SpeedChangeTrapWeight.value
-
-    # Where all the magic happens of adding the junk and traps randomly
-    # AP does all the weight management so we just need to worry about how many are created
+            if name == "Speed Trap":
+                trap_list[name] = world.options.speed_trap_weight.value
+            elif name == "Damage Trap":
+                trap_list[name] = world.options.damage_trap_weight.value
+            elif name == "Confusion Trap":
+                trap_list[name] = world.options.confusion_trap_weight.value
+    
+    # Create the items
     for i in range(count):
-        if trap_chance > 0 and world.random.randint(1, 100) <= trap_chance:
-            junk_pool.append(world.create_item(
-                world.random.choices(list(trap_list.keys()), weights=list(trap_list.values()), k=1)[0]))
+        if trap_chance > 0 and world.random.randint(1, 100) <= trap_chance and trap_list:
+            item_name = world.random.choices(list(trap_list.keys()), weights=list(trap_list.values()), k=1)[0]
+            junk_pool.append(world.create_item(item_name))
         else:
-            junk_pool.append(world.create_item(
-                world.random.choices(list(junk_list.keys()), weights=list(junk_list.values()), k=1)[0]))
-
+            if junk_list:
+                item_name = world.random.choices(list(junk_list.keys()), weights=list(junk_list.values()), k=1)[0]
+                junk_pool.append(world.create_item(item_name))
+    
     return junk_pool
 
-# Time for the fun part of listing all of the items
-# Watch out for overlap with your item codes
-# These are just random numbers dont trust them PLEASE
-# I've seen some games that dynamically add item codes such as DOOM as well
-ap_skeleton_items = {
-    # Progression items
-    "A cute rat": ItemData(20050001, ItemClassification.progression),
-    "Estrogen": ItemData(20050002, ItemClassification.progression),
-    "Testosterone": ItemData(20050003, ItemClassification.progression),
-
-    # Useful items
-    "A good friend": ItemData(20050004, ItemClassification.useful),
-    "500 cigarettes": ItemData(20050005, ItemClassification.useful),
-    "Crime Baby": ItemData(20050006, ItemClassification.useful),
-
-    # Victory is added here since in this organization it needs to be in the default item pool
-    "Victory": ItemData(20050007, ItemClassification.progression)
+# PROGRESSION ITEMS - Items required to progress through the game
+# Based on PROGRESSION_KEY_ITEMS from the Terranigma Randomizer
+# Range: BASE_ID + PROGRESSION_FLAG + index (700000-700255)
+progression_items = {
+    # Chapter 1 key items
+    "Sleepless Seal": ItemData(BASE_ID + PROGRESSION_FLAG + 0, ItemClassification.progression),
+    "Crystal Thread": ItemData(BASE_ID + PROGRESSION_FLAG + 1, ItemClassification.progression),
+    "ElleCape": ItemData(BASE_ID + PROGRESSION_FLAG + 2, ItemClassification.progression),
+    "Sharp Claws": ItemData(BASE_ID + PROGRESSION_FLAG + 3, ItemClassification.progression),
+    
+    # Chapter 2 key items
+    "Giant Leaves": ItemData(BASE_ID + PROGRESSION_FLAG + 10, ItemClassification.progression),
+    "Ra Dewdrop": ItemData(BASE_ID + PROGRESSION_FLAG + 11, ItemClassification.progression),
+    "RocSpear": ItemData(BASE_ID + PROGRESSION_FLAG + 12, ItemClassification.progression),
+    "Snowgrass Leaf": ItemData(BASE_ID + PROGRESSION_FLAG + 13, ItemClassification.progression),
+    
+    # Chapter 3 key items
+    "Red Scarf": ItemData(BASE_ID + PROGRESSION_FLAG + 20, ItemClassification.progression),
+    "Holy Seal": ItemData(BASE_ID + PROGRESSION_FLAG + 21, ItemClassification.progression),
+    "Mushroom": ItemData(BASE_ID + PROGRESSION_FLAG + 22, ItemClassification.progression),
+    "Protect Bell": ItemData(BASE_ID + PROGRESSION_FLAG + 23, ItemClassification.progression),
+    "Dog Whistle": ItemData(BASE_ID + PROGRESSION_FLAG + 24, ItemClassification.progression),
+    "Ruby": ItemData(BASE_ID + PROGRESSION_FLAG + 25, ItemClassification.progression),
+    "Sapphire": ItemData(BASE_ID + PROGRESSION_FLAG + 26, ItemClassification.progression),
+    "Black Opal": ItemData(BASE_ID + PROGRESSION_FLAG + 27, ItemClassification.progression),
+    "Topaz": ItemData(BASE_ID + PROGRESSION_FLAG + 28, ItemClassification.progression),
+    "Tower Key": ItemData(BASE_ID + PROGRESSION_FLAG + 29, ItemClassification.progression),
+    "Speed Shoes": ItemData(BASE_ID + PROGRESSION_FLAG + 30, ItemClassification.progression),
+    "Engagement Ring": ItemData(BASE_ID + PROGRESSION_FLAG + 31, ItemClassification.progression),
+    "Magic Anchor": ItemData(BASE_ID + PROGRESSION_FLAG + 32, ItemClassification.progression),
+    "Air Herb": ItemData(BASE_ID + PROGRESSION_FLAG + 33, ItemClassification.progression),
+    "Sewer Key": ItemData(BASE_ID + PROGRESSION_FLAG + 34, ItemClassification.progression),
+    "Transceiver": ItemData(BASE_ID + PROGRESSION_FLAG + 35, ItemClassification.progression),
+    
+    # Chapter 4 key items
+    "Starstone": ItemData(BASE_ID + PROGRESSION_FLAG + 40, ItemClassification.progression_skip_balancing, 5),
+    "Time Bomb": ItemData(BASE_ID + PROGRESSION_FLAG + 41, ItemClassification.progression),
+    "Jail Key": ItemData(BASE_ID + PROGRESSION_FLAG + 42, ItemClassification.progression),
+    "Ginseng": ItemData(BASE_ID + PROGRESSION_FLAG + 43, ItemClassification.progression),
+    
+    # Victory condition
+    "Victory": ItemData(BASE_ID + PROGRESSION_FLAG + 255, ItemClassification.progression)
 }
 
-# I like to split up the items so that its easier to look at and since sometimes you only need to look at one specific type of list
-# An example of that is in create_itempool where I simulated having a starting chapter
-ap_skeleton_chapters = {
-    "Green Hill Zone": ItemData(20050008, ItemClassification.progression),
-    "Romania": ItemData(20050009, ItemClassification.progression),
-    "The Sewer": ItemData(20050010, ItemClassification.progression)
+# WEAPONS - Range: BASE_ID + WEAPON_FLAG + index (700256-700511)
+weapon_items = {
+    "HexRod": ItemData(BASE_ID + WEAPON_FLAG + 0, ItemClassification.useful),
+    "CrySpear": ItemData(BASE_ID + WEAPON_FLAG + 1, ItemClassification.useful),
+    "RaSpear": ItemData(BASE_ID + WEAPON_FLAG + 2, ItemClassification.useful),
+    "Sticker": ItemData(BASE_ID + WEAPON_FLAG + 3, ItemClassification.useful),
+    "Neo Fang": ItemData(BASE_ID + WEAPON_FLAG + 4, ItemClassification.useful),
+    "Icepick": ItemData(BASE_ID + WEAPON_FLAG + 5, ItemClassification.useful),
+    "BrnzPike": ItemData(BASE_ID + WEAPON_FLAG + 10, ItemClassification.useful),
+    "LightRod": ItemData(BASE_ID + WEAPON_FLAG + 11, ItemClassification.useful),
+    "SlverPike": ItemData(BASE_ID + WEAPON_FLAG + 12, ItemClassification.useful),
+    "FirePike": ItemData(BASE_ID + WEAPON_FLAG + 13, ItemClassification.useful),
+    "Trident": ItemData(BASE_ID + WEAPON_FLAG + 14, ItemClassification.useful),
+    "SoulWand": ItemData(BASE_ID + WEAPON_FLAG + 15, ItemClassification.useful),
+    "ThunPike": ItemData(BASE_ID + WEAPON_FLAG + 16, ItemClassification.useful),
+    "SeaSpear": ItemData(BASE_ID + WEAPON_FLAG + 20, ItemClassification.useful),
+    "GeoStaff": ItemData(BASE_ID + WEAPON_FLAG + 21, ItemClassification.useful),
+    "DrgnPike": ItemData(BASE_ID + WEAPON_FLAG + 22, ItemClassification.useful),
+    "3PartRod": ItemData(BASE_ID + WEAPON_FLAG + 23, ItemClassification.useful),
+    "LghtPike": ItemData(BASE_ID + WEAPON_FLAG + 24, ItemClassification.useful),
+    "Fauchard": ItemData(BASE_ID + WEAPON_FLAG + 25, ItemClassification.useful),
 }
 
-# In the way that I made items, I added a way to specify how many of an item should exist
-# That's why junk has a 0 since how many are created is in the create_junk_items
-# There is a better way of doing this but this is my jank
+# ARMOR - Range: BASE_ID + ARMOR_FLAG + index (700512-700767)
+armor_items = {
+    "Tanned": ItemData(BASE_ID + ARMOR_FLAG + 0, ItemClassification.useful),
+    "Leather": ItemData(BASE_ID + ARMOR_FLAG + 1, ItemClassification.useful),
+    "SilkRobe": ItemData(BASE_ID + ARMOR_FLAG + 2, ItemClassification.useful),
+    "Chain": ItemData(BASE_ID + ARMOR_FLAG + 10, ItemClassification.useful),
+    "Bronze": ItemData(BASE_ID + ARMOR_FLAG + 11, ItemClassification.useful),
+    "Iron": ItemData(BASE_ID + ARMOR_FLAG + 12, ItemClassification.useful),
+    "Steel": ItemData(BASE_ID + ARMOR_FLAG + 20, ItemClassification.useful),
+    "Silver": ItemData(BASE_ID + ARMOR_FLAG + 21, ItemClassification.useful),
+    "Crystal": ItemData(BASE_ID + ARMOR_FLAG + 22, ItemClassification.useful),
+    "KingArmr": ItemData(BASE_ID + ARMOR_FLAG + 30, ItemClassification.useful),
+    "Gaia": ItemData(BASE_ID + ARMOR_FLAG + 31, ItemClassification.useful),
+}
+
+# CONSUMABLES - Range: BASE_ID + CONSUMABLE_FLAG + index (700768-701023)
+consumable_items = {
+    "M.Bulb": ItemData(BASE_ID + CONSUMABLE_FLAG + 0, ItemClassification.useful),
+    "P. Cure": ItemData(BASE_ID + CONSUMABLE_FLAG + 1, ItemClassification.useful),
+    "S. Bulb": ItemData(BASE_ID + CONSUMABLE_FLAG + 2, ItemClassification.useful),
+    "Cure": ItemData(BASE_ID + CONSUMABLE_FLAG + 3, ItemClassification.useful),
+    "Stardew": ItemData(BASE_ID + CONSUMABLE_FLAG + 4, ItemClassification.useful),
+    "Serum": ItemData(BASE_ID + CONSUMABLE_FLAG + 10, ItemClassification.useful),
+    "H.Water": ItemData(BASE_ID + CONSUMABLE_FLAG + 11, ItemClassification.useful),
+    "STR Potion": ItemData(BASE_ID + CONSUMABLE_FLAG + 12, ItemClassification.useful),
+    "DEF Potion": ItemData(BASE_ID + CONSUMABLE_FLAG + 13, ItemClassification.useful),
+    "Luck Potion": ItemData(BASE_ID + CONSUMABLE_FLAG + 14, ItemClassification.useful),
+    "Life Potion": ItemData(BASE_ID + CONSUMABLE_FLAG + 15, ItemClassification.useful),
+}
+
+# JUNK/FILLER ITEMS - Gems - Range: BASE_ID + GEM_FLAG + index (701024-701279)
 junk_items = {
-    # Junk
-    "An Old Gamecube": ItemData(20050011, ItemClassification.filler, 0),
-    "Coughing Baby": ItemData(20050012, ItemClassification.filler, 0),
-
-    # Traps
-    "Forcefem Trap": ItemData(20050013, ItemClassification.trap, 0),
-    "Speed Change Trap": ItemData(20050014, ItemClassification, 0)
+    "30 Gems": ItemData(BASE_ID + GEM_FLAG + 0, ItemClassification.filler),
+    "50 Gems": ItemData(BASE_ID + GEM_FLAG + 1, ItemClassification.filler),
+    "100 Gems": ItemData(BASE_ID + GEM_FLAG + 2, ItemClassification.filler),
+    "200 Gems": ItemData(BASE_ID + GEM_FLAG + 10, ItemClassification.filler),
+    "300 Gems": ItemData(BASE_ID + GEM_FLAG + 11, ItemClassification.filler),
+    "500 Gems": ItemData(BASE_ID + GEM_FLAG + 12, ItemClassification.filler),
+    "753 Gems": ItemData(BASE_ID + GEM_FLAG + 20, ItemClassification.filler),
+    "892 Gems": ItemData(BASE_ID + GEM_FLAG + 21, ItemClassification.filler),
+    "1003 Gems": ItemData(BASE_ID + GEM_FLAG + 22, ItemClassification.filler)
 }
 
-# Junk weights is just how often an item will be chosen when junk is being made
-# Bigger item = more likely to show up
+# TRAP ITEMS - Range: BASE_ID + TRAP_FLAG + index (701280-701535)
+trap_items = {
+    "Speed Trap": ItemData(BASE_ID + TRAP_FLAG + 0, ItemClassification.trap),
+    "Damage Trap": ItemData(BASE_ID + TRAP_FLAG + 1, ItemClassification.trap),
+    "Confusion Trap": ItemData(BASE_ID + TRAP_FLAG + 2, ItemClassification.trap)
+}
+
+# Combine equipment items for convenience
+useful_items = {
+    **weapon_items,
+    **armor_items,
+    **consumable_items,
+}
+
+# Junk item weights for random selection
 junk_weights = {
-    "An Old Gamecube": 40,
-    "Coughing Baby": 20
+    "30 Gems": 15,
+    "50 Gems": 20, 
+    "100 Gems": 25,
+    "200 Gems": 20,
+    "300 Gems": 15,
+    "500 Gems": 10,
+    "753 Gems": 8,
+    "892 Gems": 5,
+    "1003 Gems": 3
 }
 
-# This makes a really convenient list of all the other dictionaries
-# (fun fact: {} is a dictionary)
+# Combine all item tables
 item_table = {
-    **ap_skeleton_items,
-    **ap_skeleton_chapters,
-    **junk_items
+    **progression_items,
+    **useful_items,
+    **junk_items,
+    **trap_items
+}
+
+# Junk item weights for random selection
+junk_weights = {
+    "30 Gems": 15,
+    "50 Gems": 20, 
+    "100 Gems": 25,
+    "200 Gems": 20,
+    "300 Gems": 15,
+    "500 Gems": 10,
+    "753 Gems": 8,
+    "892 Gems": 5,
+    "1003 Gems": 3
+}
+
+# Combine all item tables
+item_table = {
+    **progression_items,
+    **useful_items,
+    **junk_items,
+    **trap_items
 }
